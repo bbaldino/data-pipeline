@@ -2,8 +2,8 @@ use std::fmt::Display;
 
 use crate::{node::Node, stats_producer::StatsProducer};
 
-pub trait NodeVisitor {
-    fn visit(&mut self, node: &Node);
+pub trait NodeVisitor<T> {
+    fn visit(&mut self, node: &Node<T>);
 }
 
 #[derive(Default, Debug)]
@@ -21,8 +21,8 @@ impl Display for StatsNodeVisitor {
     }
 }
 
-impl NodeVisitor for StatsNodeVisitor {
-    fn visit(&mut self, node: &Node) {
+impl<T> NodeVisitor<T> for StatsNodeVisitor {
+    fn visit(&mut self, node: &Node<T>) {
         if let Some(stats) = node.get_stats() {
             self.all_stats[node.name()] = stats;
         }

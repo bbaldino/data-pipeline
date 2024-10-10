@@ -7,8 +7,7 @@ use anyhow::anyhow;
 use serde_json::json;
 
 use crate::{
-    node_visitor::NodeVisitor, packet_handler::SomePacketHandler, packet_info::PacketInfo,
-    stats_producer::StatsProducer,
+    node_visitor::NodeVisitor, packet_handler::SomePacketHandler, stats_producer::StatsProducer,
 };
 
 #[derive(Default)]
@@ -22,11 +21,17 @@ struct NodeStatsTracker {
 
 /// [`NodeRef`] is really just a convenience helper to hide how references are held and take care
 /// of the mutex logic
-#[derive(Clone)]
-pub struct NodeRef(Arc<Mutex<Node>>);
+pub struct NodeRef<T>(Arc<Mutex<Node<T>>>);
 
-impl NodeRef {
-    pub fn new(node: Node) -> Self {
+// derive(Clone) doesn't work with the generic
+impl<T> Clone for NodeRef<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T> NodeRef<T> {
+    pub fn new(node: Node<T>) -> NodeRef<T> {
         NodeRef(Arc::new(Mutex::new(node)))
     }
 
@@ -34,19 +39,19 @@ impl NodeRef {
         self.0.lock().unwrap().name.clone()
     }
 
-    pub fn set_next(&self, next: NodeRef) {
+    pub fn set_next(&self, next: NodeRef<T>) {
         self.0.lock().unwrap().next = Some(next)
     }
 
-    pub fn set_prev(&self, prev: NodeRef) {
+    pub fn set_prev(&self, prev: NodeRef<T>) {
         self.0.lock().unwrap().prev = Some(prev)
     }
 
-    pub fn process_packet(&self, packet: PacketInfo) {
+    pub fn process_packet(&self, packet: T) {
         self.0.lock().unwrap().process_packet(packet);
     }
 
-    pub fn visit(&self, visitor: &mut dyn NodeVisitor) {
+    pub fn visit(&self, visitor: &mut dyn NodeVisitor<T>) {
         self.0.lock().unwrap().visit(visitor)
     }
 }
@@ -56,27 +61,27 @@ impl NodeRef {
 // nodes don't know/care if there _is_ a next node.  For a demuxer, which uses ForwardTo, there
 // will be a definitive next node to forward to, so at this point I think the two variants make
 // sense?
-enum SomePacketHandlerResult<'a> {
+enum SomePacketHandlerResult<'a, T> {
     // The given PacketInfo should be forwarded to the next node
-    ForwardToNext(PacketInfo),
+    ForwardToNext(T),
     // The given PacketInfo should be forwarded to the given node
-    ForwardTo(PacketInfo, &'a NodeRef),
+    ForwardTo(T, &'a NodeRef<T>),
     // The PacketInfo was consumed
     Consumed,
     // The PacketInfo should be discarded
     Discard,
 }
 
-pub struct Node {
+pub struct Node<T> {
     name: String,
-    handler: SomePacketHandler,
+    handler: SomePacketHandler<T>,
     stats: NodeStatsTracker,
-    next: Option<NodeRef>,
-    prev: Option<NodeRef>,
+    next: Option<NodeRef<T>>,
+    prev: Option<NodeRef<T>>,
 }
 
-impl Node {
-    pub fn new<T: Into<String>, U: Into<SomePacketHandler>>(name: T, handler: U) -> Self {
+impl<T> Node<T> {
+    pub fn new<U: Into<String>, V: Into<SomePacketHandler<T>>>(name: U, handler: V) -> Node<T> {
         Self {
             name: name.into(),
             handler: handler.into(),
@@ -90,15 +95,15 @@ impl Node {
         self.name.as_str()
     }
 
-    pub fn set_next(&mut self, next: NodeRef) {
+    pub fn set_next(&mut self, next: NodeRef<T>) {
         self.next = Some(next)
     }
 
-    pub fn set_prev(&mut self, prev: NodeRef) {
+    pub fn set_prev(&mut self, prev: NodeRef<T>) {
         self.prev = Some(prev)
     }
 
-    pub fn process_packet(&mut self, packet: PacketInfo) {
+    pub fn process_packet(&mut self, packet: T) {
         self.stats.packets_ingress += 1;
         let start = Instant::now();
         let packet_handler_result = match self.handler {
@@ -152,7 +157,7 @@ impl Node {
         }
     }
 
-    pub fn visit(&mut self, visitor: &mut dyn NodeVisitor) {
+    pub fn visit(&mut self, visitor: &mut dyn NodeVisitor<T>) {
         visitor.visit(self);
         if let Some(ref mut n) = self.next {
             n.visit(visitor);
@@ -160,7 +165,7 @@ impl Node {
     }
 }
 
-impl StatsProducer for Node {
+impl<T> StatsProducer for Node<T> {
     fn get_stats(&self) -> Option<serde_json::Value> {
         Some(json!({
             "packets_ingress": self.stats.packets_ingress,

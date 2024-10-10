@@ -34,8 +34,8 @@ mod test {
         }
     }
 
-    impl PacketObserver for PacketLogger {
-        fn observe(&mut self, _data: &crate::packet_info::PacketInfo) {
+    impl<T> PacketObserver<T> for PacketLogger {
+        fn observe(&mut self, _data: &T) {
             // println!("saw packet {data:?}");
         }
     }
@@ -71,12 +71,12 @@ mod test {
 
     #[test]
     fn test_builder() {
-        let _pipeline = PipelineBuilder::new()
+        let pipeline = PipelineBuilder::new()
             .demux(
                 "odd/even demuxer",
                 StaticDemuxer::new(vec![
                     ConditionalPath {
-                        predicate: Box::new(|_| true),
+                        predicate: Box::new(|num: &u32| num % 2 == 0),
                         next: PipelineBuilder::new()
                             .attach(NodeRef::new(Node::new("1a", PacketLogger)))
                             .attach(NodeRef::new(Node::new("2a", PacketLogger)))
@@ -84,7 +84,7 @@ mod test {
                             .build(),
                     },
                     ConditionalPath {
-                        predicate: Box::new(|_| true),
+                        predicate: Box::new(|num: &u32| num % 2 == 1),
                         next: PipelineBuilder::new()
                             .attach(NodeRef::new(Node::new("1b", PacketLogger)))
                             .attach(NodeRef::new(Node::new("2b", PacketLogger)))
@@ -94,5 +94,12 @@ mod test {
                 ]),
             )
             .build();
+
+        for i in 0..10 {
+            pipeline.process_packet(i);
+        }
+        let mut stats = StatsNodeVisitor::default();
+        pipeline.visit(&mut stats);
+        println!("{:#}", stats);
     }
 }

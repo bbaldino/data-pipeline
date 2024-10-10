@@ -13,34 +13,34 @@ impl PipelineState for Open {}
 impl PipelineState for Terminated {}
 
 #[derive(Default)]
-pub struct PipelineBuilder<T: PipelineState> {
-    nodes: Vec<NodeRef>,
-    _state: PhantomData<T>,
+pub struct PipelineBuilder<S: PipelineState, T> {
+    nodes: Vec<NodeRef<T>>,
+    _state: PhantomData<S>,
 }
 
-impl Default for PipelineBuilder<Open> {
+impl<T> Default for PipelineBuilder<Open, T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl PipelineBuilder<Open> {
+impl<T> PipelineBuilder<Open, T> {
     pub fn new() -> Self {
-        PipelineBuilder::<Open> {
+        PipelineBuilder::<Open, T> {
             nodes: Vec::new(),
             _state: PhantomData,
         }
     }
 }
 
-impl<T: PipelineState> PipelineBuilder<T> {
-    pub fn build(mut self) -> NodeRef {
+impl<S: PipelineState, T> PipelineBuilder<S, T> {
+    pub fn build(mut self) -> NodeRef<T> {
         self.nodes.remove(0)
     }
 }
 
-impl PipelineBuilder<Open> {
-    pub fn attach(mut self, node: NodeRef) -> Self {
+impl<T> PipelineBuilder<Open, T> {
+    pub fn attach(mut self, node: NodeRef<T>) -> Self {
         if let Some(last) = self.nodes.last() {
             last.set_next(node.clone());
             node.set_prev(last.clone());
@@ -49,11 +49,11 @@ impl PipelineBuilder<Open> {
         self
     }
 
-    pub fn demux<T: Into<String>>(
+    pub fn demux<U: Into<String>>(
         mut self,
-        name: T,
-        demuxer: impl PacketDemuxer + Send + 'static,
-    ) -> PipelineBuilder<Terminated> {
+        name: U,
+        demuxer: impl PacketDemuxer<T> + Send + 'static,
+    ) -> PipelineBuilder<Terminated, T> {
         let new_node = NodeRef::new(Node::new(
             name,
             SomePacketHandler::Demuxer(Box::new(demuxer)),
@@ -67,7 +67,7 @@ impl PipelineBuilder<Open> {
         // paths, so although a pipeline will almost always continue after a demuxer, from a
         // builder perspective the demuxer needs to be built with its own sub-pipelines for its
         // downstream paths.
-        PipelineBuilder::<Terminated> {
+        PipelineBuilder::<Terminated, T> {
             nodes: self.nodes,
             _state: PhantomData::<Terminated>,
         }

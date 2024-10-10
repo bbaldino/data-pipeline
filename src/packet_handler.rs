@@ -1,36 +1,36 @@
 use anyhow::Result;
 
-use crate::{node::NodeRef, packet_info::PacketInfo, stats_producer::StatsProducer};
+use crate::{node::NodeRef, stats_producer::StatsProducer};
 
-pub trait PacketObserver: StatsProducer {
-    fn observe(&mut self, data: &PacketInfo);
+pub trait PacketObserver<T>: StatsProducer {
+    fn observe(&mut self, data: &T);
 }
 
-pub trait PacketTransformer: StatsProducer {
-    fn transform(&mut self, data: PacketInfo) -> Result<PacketInfo>;
+pub trait PacketTransformer<T>: StatsProducer {
+    fn transform(&mut self, data: T) -> Result<T>;
 }
 
-pub trait PacketFilter: StatsProducer {
-    fn should_forward(&mut self, packet_info: &PacketInfo) -> bool;
+pub trait PacketFilter<T>: StatsProducer {
+    fn should_forward(&mut self, packet_info: &T) -> bool;
 }
 
-impl<F> StatsProducer for F where F: FnMut(&PacketInfo) -> bool {}
+// impl<T, F> StatsProducer for F where F: FnMut(&T) -> bool {}
+//
+// impl<T, F> PacketFilter<T> for F
+// where
+//     F: FnMut(&T) -> bool,
+// {
+//     fn should_forward(&mut self, packet_info: &T) -> bool {
+//         (self)(packet_info)
+//     }
+// }
 
-impl<F> PacketFilter for F
-where
-    F: FnMut(&PacketInfo) -> bool,
-{
-    fn should_forward(&mut self, packet_info: &PacketInfo) -> bool {
-        (self)(packet_info)
-    }
+pub trait PacketConsumer<T>: StatsProducer {
+    fn consume(&mut self, packet_info: T);
 }
 
-pub trait PacketConsumer: StatsProducer {
-    fn consume(&mut self, packet_info: PacketInfo);
-}
-
-pub trait PacketDemuxer: StatsProducer {
-    fn find_path(&mut self, packet_info: &PacketInfo) -> Option<&NodeRef>;
+pub trait PacketDemuxer<T>: StatsProducer {
+    fn find_path(&mut self, packet_info: &T) -> Option<&NodeRef<T>>;
     //     // PacketDemuxer has to have its own visitor logic since it handles its own paths
     //     fn visit(&mut self, visitor: &mut dyn NodeVisitor);
 }
@@ -41,7 +41,7 @@ pub trait PacketDemuxer: StatsProducer {
 #[macro_export]
 macro_rules! impl_conversion_to_some_packet_handler {
     ($type:ty,$variant:ident) => {
-        impl From<$type> for $crate::packet_handler::SomePacketHandler {
+        impl<T> From<$type> for $crate::packet_handler::SomePacketHandler<T> {
             fn from(value: $type) -> Self {
                 $crate::packet_handler::SomePacketHandler::$variant(Box::new(value))
             }
@@ -49,15 +49,15 @@ macro_rules! impl_conversion_to_some_packet_handler {
     };
 }
 
-pub enum SomePacketHandler {
-    Observer(Box<dyn PacketObserver + Send>),
-    Transformer(Box<dyn PacketTransformer + Send>),
-    Filter(Box<dyn PacketFilter + Send>),
-    Consumer(Box<dyn PacketConsumer + Send>),
-    Demuxer(Box<dyn PacketDemuxer + Send>),
+pub enum SomePacketHandler<T> {
+    Observer(Box<dyn PacketObserver<T> + Send>),
+    Transformer(Box<dyn PacketTransformer<T> + Send>),
+    Filter(Box<dyn PacketFilter<T> + Send>),
+    Consumer(Box<dyn PacketConsumer<T> + Send>),
+    Demuxer(Box<dyn PacketDemuxer<T> + Send>),
 }
 
-impl StatsProducer for SomePacketHandler {
+impl<T> StatsProducer for SomePacketHandler<T> {
     fn get_stats(&self) -> Option<serde_json::Value> {
         match self {
             SomePacketHandler::Observer(ref o) => o.get_stats(),
