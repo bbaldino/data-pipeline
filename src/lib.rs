@@ -1,3 +1,4 @@
+pub mod handlers;
 pub mod node;
 pub mod node_visitor;
 pub mod packet_handler;
@@ -12,6 +13,7 @@ mod test {
     use serde_json::json;
 
     use crate::{
+        handlers::static_demuxer::{ConditionalPath, StaticDemuxer},
         impl_conversion_to_some_packet_handler,
         node::{Node, NodeRef},
         node_visitor::StatsNodeVisitor,
@@ -65,5 +67,32 @@ mod test {
         let mut stats = StatsNodeVisitor::default();
         first_node.visit(&mut stats);
         println!("{:#}", stats);
+    }
+
+    #[test]
+    fn test_builder() {
+        let _pipeline = PipelineBuilder::new()
+            .demux(
+                "odd/even demuxer",
+                StaticDemuxer::new(vec![
+                    ConditionalPath {
+                        predicate: Box::new(|_| true),
+                        next: PipelineBuilder::new()
+                            .attach(NodeRef::new(Node::new("1a", PacketLogger)))
+                            .attach(NodeRef::new(Node::new("2a", PacketLogger)))
+                            .attach(NodeRef::new(Node::new("3a", PacketLogger)))
+                            .build(),
+                    },
+                    ConditionalPath {
+                        predicate: Box::new(|_| true),
+                        next: PipelineBuilder::new()
+                            .attach(NodeRef::new(Node::new("1b", PacketLogger)))
+                            .attach(NodeRef::new(Node::new("2b", PacketLogger)))
+                            .attach(NodeRef::new(Node::new("3b", PacketLogger)))
+                            .build(),
+                    },
+                ]),
+            )
+            .build();
     }
 }
