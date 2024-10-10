@@ -7,14 +7,14 @@ use anyhow::anyhow;
 use serde_json::json;
 
 use crate::{
-    node_visitor::NodeVisitor, packet_handler::SomePacketHandler, stats_producer::StatsProducer,
+    data_handler::SomeDataHandler, node_visitor::NodeVisitor, stats_producer::StatsProducer,
 };
 
 #[derive(Default)]
 struct NodeStatsTracker {
-    packets_ingress: u32,
-    packets_egress: u32,
-    packets_discarded: u32,
+    data_ingress: u32,
+    data_egress: u32,
+    data_discarded: u32,
     errors: u32,
     total_processing_time: Duration,
 }
@@ -47,8 +47,8 @@ impl<T> NodeRef<T> {
         self.0.lock().unwrap().prev = Some(prev)
     }
 
-    pub fn process_packet(&self, packet: T) {
-        self.0.lock().unwrap().process_packet(packet);
+    pub fn process_data(&self, data: T) {
+        self.0.lock().unwrap().process_data(data);
     }
 
     pub fn visit(&self, visitor: &mut dyn NodeVisitor<T>) {
@@ -56,32 +56,32 @@ impl<T> NodeRef<T> {
     }
 }
 
-/// A helper type to model the possible outcomes of passing a packet to [`SomePacketHandler`].
+/// A helper type to model the possible outcomes of passing data to [`SomeDataHandler`].
 // Note: I had a thought to get rid of 'ForwardToNext' and always use 'ForwardTo', but non-demux
 // nodes don't know/care if there _is_ a next node.  For a demuxer, which uses ForwardTo, there
 // will be a definitive next node to forward to, so at this point I think the two variants make
 // sense?
-enum SomePacketHandlerResult<'a, T> {
-    // The given PacketInfo should be forwarded to the next node
+enum SomeDataHandlerResult<'a, T> {
+    // The given data should be forwarded to the next node
     ForwardToNext(T),
-    // The given PacketInfo should be forwarded to the given node
+    // The given data should be forwarded to the given node
     ForwardTo(T, &'a NodeRef<T>),
-    // The PacketInfo was consumed
+    // The data was consumed
     Consumed,
-    // The PacketInfo should be discarded
+    // The data should be discarded
     Discard,
 }
 
 pub struct Node<T> {
     name: String,
-    handler: SomePacketHandler<T>,
+    handler: SomeDataHandler<T>,
     stats: NodeStatsTracker,
     next: Option<NodeRef<T>>,
     prev: Option<NodeRef<T>>,
 }
 
 impl<T> Node<T> {
-    pub fn new<U: Into<String>, V: Into<SomePacketHandler<T>>>(name: U, handler: V) -> Node<T> {
+    pub fn new<U: Into<String>, V: Into<SomeDataHandler<T>>>(name: U, handler: V) -> Node<T> {
         Self {
             name: name.into(),
             handler: handler.into(),
@@ -103,56 +103,56 @@ impl<T> Node<T> {
         self.prev = Some(prev)
     }
 
-    pub fn process_packet(&mut self, packet: T) {
-        self.stats.packets_ingress += 1;
+    pub fn process_data(&mut self, data: T) {
+        self.stats.data_ingress += 1;
         let start = Instant::now();
-        let packet_handler_result = match self.handler {
-            SomePacketHandler::Observer(ref mut o) => {
-                o.observe(&packet);
-                Ok(SomePacketHandlerResult::ForwardToNext(packet))
+        let data_handler_result = match self.handler {
+            SomeDataHandler::Observer(ref mut o) => {
+                o.observe(&data);
+                Ok(SomeDataHandlerResult::ForwardToNext(data))
             }
-            SomePacketHandler::Transformer(ref mut t) => match t.transform(packet) {
-                Ok(transformed) => Ok(SomePacketHandlerResult::ForwardToNext(transformed)),
-                Err(e) => Err(anyhow!("Packet transformer {} failed: {e:?}", self.name)),
+            SomeDataHandler::Transformer(ref mut t) => match t.transform(data) {
+                Ok(transformed) => Ok(SomeDataHandlerResult::ForwardToNext(transformed)),
+                Err(e) => Err(anyhow!("Data transformer {} failed: {e:?}", self.name)),
             },
-            SomePacketHandler::Filter(ref mut f) => match f.should_forward(&packet) {
-                true => Ok(SomePacketHandlerResult::ForwardToNext(packet)),
-                false => Ok(SomePacketHandlerResult::Discard),
+            SomeDataHandler::Filter(ref mut f) => match f.should_forward(&data) {
+                true => Ok(SomeDataHandlerResult::ForwardToNext(data)),
+                false => Ok(SomeDataHandlerResult::Discard),
             },
-            SomePacketHandler::Consumer(ref mut c) => {
-                c.consume(packet);
-                Ok(SomePacketHandlerResult::Consumed)
+            SomeDataHandler::Consumer(ref mut c) => {
+                c.consume(data);
+                Ok(SomeDataHandlerResult::Consumed)
             }
-            SomePacketHandler::Demuxer(ref mut d) => {
-                if let Some(path) = d.find_path(&packet) {
-                    Ok(SomePacketHandlerResult::ForwardTo(packet, path))
+            SomeDataHandler::Demuxer(ref mut d) => {
+                if let Some(path) = d.find_path(&data) {
+                    Ok(SomeDataHandlerResult::ForwardTo(data, path))
                 } else {
-                    Ok(SomePacketHandlerResult::Discard)
+                    Ok(SomeDataHandlerResult::Discard)
                 }
             }
         };
         let processing_duration = Instant::now() - start;
         self.stats.total_processing_time += processing_duration;
-        match packet_handler_result {
-            Ok(SomePacketHandlerResult::ForwardToNext(p)) => {
-                self.stats.packets_egress += 1;
+        match data_handler_result {
+            Ok(SomeDataHandlerResult::ForwardToNext(p)) => {
+                self.stats.data_egress += 1;
                 if let Some(ref n) = self.next {
-                    n.process_packet(p);
+                    n.process_data(p);
                 }
             }
-            Ok(SomePacketHandlerResult::ForwardTo(p, next)) => {
-                self.stats.packets_egress += 1;
-                next.process_packet(p);
+            Ok(SomeDataHandlerResult::ForwardTo(p, next)) => {
+                self.stats.data_egress += 1;
+                next.process_data(p);
             }
-            Ok(SomePacketHandlerResult::Discard) => {
-                self.stats.packets_discarded += 1;
+            Ok(SomeDataHandlerResult::Discard) => {
+                self.stats.data_discarded += 1;
             }
-            Ok(SomePacketHandlerResult::Consumed) => {
+            Ok(SomeDataHandlerResult::Consumed) => {
                 // no-op
             }
             Err(e) => {
                 self.stats.errors += 1;
-                println!("Error processing packet: {e:?}")
+                println!("Error processing data: {e:?}")
             }
         }
     }
@@ -168,12 +168,12 @@ impl<T> Node<T> {
 impl<T> StatsProducer for Node<T> {
     fn get_stats(&self) -> Option<serde_json::Value> {
         Some(json!({
-            "packets_ingress": self.stats.packets_ingress,
-            "packets_egress": self.stats.packets_egress,
-            "packets_discarded": self.stats.packets_discarded,
+            "data_ingress": self.stats.data_ingress,
+            "data_egress": self.stats.data_egress,
+            "data_discarded": self.stats.data_discarded,
             "errors": self.stats.errors,
             "total processing time": format!("{:?}", self.stats.total_processing_time),
-            "process time per packet": format!("{:?}", (self.stats.total_processing_time / self.stats.packets_ingress)),
+            "process time per item": format!("{:?}", (self.stats.total_processing_time / self.stats.data_ingress)),
             "handler_stats": self.handler.get_stats(),
         }))
     }

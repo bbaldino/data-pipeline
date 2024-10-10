@@ -1,6 +1,6 @@
 use crate::{
+    data_handler::{DataDemuxer, SomeDataHandler},
     node::NodeRef,
-    packet_handler::{PacketDemuxer, SomePacketHandler},
     stats_producer::StatsProducer,
 };
 
@@ -12,24 +12,24 @@ pub struct ConditionalPath<T, U> {
 }
 
 /// A Demuxer whose paths are fixed and known at creation time, so that they don't need to be
-/// locked for each packet.
+/// locked for each data item.
 #[derive(Default)]
 pub struct StaticDemuxer<T> {
-    packet_paths: Vec<ConditionalPath<T, NodeRef<T>>>,
+    paths: Vec<ConditionalPath<T, NodeRef<T>>>,
 }
 
 impl<T> StatsProducer for StaticDemuxer<T> {}
 
 impl<T> StaticDemuxer<T> {
-    pub fn new(packet_paths: Vec<ConditionalPath<T, NodeRef<T>>>) -> Self {
-        Self { packet_paths }
+    pub fn new(paths: Vec<ConditionalPath<T, NodeRef<T>>>) -> Self {
+        Self { paths }
     }
 }
 
-impl<T> PacketDemuxer<T> for StaticDemuxer<T> {
-    fn find_path(&mut self, packet_info: &T) -> Option<&NodeRef<T>> {
-        for path in &self.packet_paths {
-            if (path.predicate)(packet_info) {
+impl<T> DataDemuxer<T> for StaticDemuxer<T> {
+    fn find_path(&mut self, data: &T) -> Option<&NodeRef<T>> {
+        for path in &self.paths {
+            if (path.predicate)(data) {
                 return Some(&path.next);
             }
         }
@@ -37,13 +37,11 @@ impl<T> PacketDemuxer<T> for StaticDemuxer<T> {
     }
 }
 
-impl<T> From<StaticDemuxer<T>> for SomePacketHandler<T>
+impl<T> From<StaticDemuxer<T>> for SomeDataHandler<T>
 where
     T: 'static,
 {
     fn from(value: StaticDemuxer<T>) -> Self {
-        SomePacketHandler::Demuxer(Box::new(value))
+        SomeDataHandler::Demuxer(Box::new(value))
     }
 }
-
-// impl_conversion_to_some_packet_handler!(StaticDemuxer, Demuxer);

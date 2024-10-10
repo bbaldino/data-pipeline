@@ -1,8 +1,7 @@
+pub mod data_handler;
 pub mod handlers;
 pub mod node;
 pub mod node_visitor;
-pub mod packet_handler;
-pub mod packet_info;
 pub mod pipeline_builder;
 pub mod stats_producer;
 
@@ -13,19 +12,18 @@ mod test {
     use serde_json::json;
 
     use crate::{
+        data_handler::DataObserver,
         handlers::static_demuxer::{ConditionalPath, StaticDemuxer},
-        impl_conversion_to_some_packet_handler,
+        impl_conversion_to_some_data_handler,
         node::{Node, NodeRef},
         node_visitor::StatsNodeVisitor,
-        packet_handler::PacketObserver,
-        packet_info::PacketInfo,
         pipeline_builder::PipelineBuilder,
         stats_producer::StatsProducer,
     };
 
-    struct PacketLogger;
+    struct DataLogger;
 
-    impl StatsProducer for PacketLogger {
+    impl StatsProducer for DataLogger {
         // Just an example of handler-specific stats
         fn get_stats(&self) -> Option<serde_json::Value> {
             Some(json!({
@@ -34,35 +32,35 @@ mod test {
         }
     }
 
-    impl<T> PacketObserver<T> for PacketLogger {
+    impl<T> DataObserver<T> for DataLogger {
         fn observe(&mut self, _data: &T) {
-            // println!("saw packet {data:?}");
+            // println!("saw item {data:?}");
         }
     }
 
-    impl_conversion_to_some_packet_handler!(PacketLogger, Observer);
+    impl_conversion_to_some_data_handler!(DataLogger, Observer);
 
     #[test]
     fn test() {
-        let num_packets = 1000000;
+        let num_items = 1000000;
         let num_nodes = 10;
         // let first_node = NodeRef::new(Node::new("1"));
         // let mut prev_node = first_node.clone();
         let mut builder = PipelineBuilder::default();
         for i in 0..num_nodes {
-            builder = builder.attach(NodeRef::new(Node::new(format!("{i}"), PacketLogger)));
+            builder = builder.attach(NodeRef::new(Node::new(format!("{i}"), DataLogger)));
         }
 
         let first_node = builder.build();
         let start = Instant::now();
-        for _ in 0..num_packets {
-            first_node.process_packet(PacketInfo);
+        for i in 0..num_items {
+            first_node.process_data(i);
         }
         let duration = Instant::now() - start;
         println!(
-            "{num_nodes} nodes processed {num_packets} packets in {}ms ({} packets/msec)",
+            "{num_nodes} nodes processed {num_items} items in {}ms ({} items/msec)",
             duration.as_millis(),
-            (num_packets as u128 / duration.as_millis())
+            (num_items as u128 / duration.as_millis())
         );
         let mut stats = StatsNodeVisitor::default();
         first_node.visit(&mut stats);
@@ -78,17 +76,17 @@ mod test {
                     ConditionalPath {
                         predicate: Box::new(|num: &u32| num % 2 == 0),
                         next: PipelineBuilder::new()
-                            .attach(NodeRef::new(Node::new("1a", PacketLogger)))
-                            .attach(NodeRef::new(Node::new("2a", PacketLogger)))
-                            .attach(NodeRef::new(Node::new("3a", PacketLogger)))
+                            .attach(NodeRef::new(Node::new("1a", DataLogger)))
+                            .attach(NodeRef::new(Node::new("2a", DataLogger)))
+                            .attach(NodeRef::new(Node::new("3a", DataLogger)))
                             .build(),
                     },
                     ConditionalPath {
                         predicate: Box::new(|num: &u32| num % 2 == 1),
                         next: PipelineBuilder::new()
-                            .attach(NodeRef::new(Node::new("1b", PacketLogger)))
-                            .attach(NodeRef::new(Node::new("2b", PacketLogger)))
-                            .attach(NodeRef::new(Node::new("3b", PacketLogger)))
+                            .attach(NodeRef::new(Node::new("1b", DataLogger)))
+                            .attach(NodeRef::new(Node::new("2b", DataLogger)))
+                            .attach(NodeRef::new(Node::new("3b", DataLogger)))
                             .build(),
                     },
                 ]),
@@ -96,7 +94,7 @@ mod test {
             .build();
 
         for i in 0..10 {
-            pipeline.process_packet(i);
+            pipeline.process_data(i);
         }
         let mut stats = StatsNodeVisitor::default();
         pipeline.visit(&mut stats);

@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use crate::{
+    data_handler::{DataDemuxer, SomeDataHandler},
     node::{Node, NodeRef},
-    packet_handler::{PacketDemuxer, SomePacketHandler},
 };
 
 pub trait PipelineState {}
@@ -52,12 +52,9 @@ impl<T> PipelineBuilder<Open, T> {
     pub fn demux<U: Into<String>>(
         mut self,
         name: U,
-        demuxer: impl PacketDemuxer<T> + Send + 'static,
+        demuxer: impl DataDemuxer<T> + Send + 'static,
     ) -> PipelineBuilder<Terminated, T> {
-        let new_node = NodeRef::new(Node::new(
-            name,
-            SomePacketHandler::Demuxer(Box::new(demuxer)),
-        ));
+        let new_node = NodeRef::new(Node::new(name, SomeDataHandler::Demuxer(Box::new(demuxer))));
         if let Some(last) = self.nodes.last() {
             last.set_next(new_node.clone());
             new_node.set_prev(last.clone());
