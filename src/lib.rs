@@ -15,7 +15,7 @@ mod test {
         data_handler::DataObserver,
         handlers::static_demuxer::{ConditionalPath, StaticDemuxer},
         impl_conversion_to_some_data_handler,
-        node::{Node, NodeRef},
+        node::Node,
         node_visitor::StatsNodeVisitor,
         pipeline_builder::PipelineBuilder,
         stats_producer::StatsProducer,
@@ -48,7 +48,7 @@ mod test {
         // let mut prev_node = first_node.clone();
         let mut builder = PipelineBuilder::default();
         for i in 0..num_nodes {
-            builder = builder.attach(NodeRef::new(Node::new(format!("{i}"), DataLogger)));
+            builder = builder.attach(Node::new(format!("{i}"), DataLogger));
         }
 
         let first_node = builder.build();
@@ -76,17 +76,17 @@ mod test {
                     ConditionalPath {
                         predicate: Box::new(|num: &u32| num % 2 == 0),
                         next: PipelineBuilder::new()
-                            .attach(NodeRef::new(Node::new("1a", DataLogger)))
-                            .attach(NodeRef::new(Node::new("2a", DataLogger)))
-                            .attach(NodeRef::new(Node::new("3a", DataLogger)))
+                            .attach(Node::new("1a", DataLogger))
+                            .attach(Node::new("2a", DataLogger))
+                            .attach(Node::new("3a", DataLogger))
                             .build(),
                     },
                     ConditionalPath {
                         predicate: Box::new(|num: &u32| num % 2 == 1),
                         next: PipelineBuilder::new()
-                            .attach(NodeRef::new(Node::new("1b", DataLogger)))
-                            .attach(NodeRef::new(Node::new("2b", DataLogger)))
-                            .attach(NodeRef::new(Node::new("3b", DataLogger)))
+                            .attach(Node::new("1b", DataLogger))
+                            .attach(Node::new("2b", DataLogger))
+                            .attach(Node::new("3b", DataLogger))
                             .build(),
                     },
                 ]),

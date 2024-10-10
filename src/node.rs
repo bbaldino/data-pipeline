@@ -30,6 +30,12 @@ impl<T> Clone for NodeRef<T> {
     }
 }
 
+impl<T> From<Node<T>> for NodeRef<T> {
+    fn from(val: Node<T>) -> Self {
+        NodeRef::new(val)
+    }
+}
+
 impl<T> NodeRef<T> {
     pub fn new(node: Node<T>) -> NodeRef<T> {
         NodeRef(Arc::new(Mutex::new(node)))

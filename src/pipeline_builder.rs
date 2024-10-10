@@ -40,12 +40,13 @@ impl<S: PipelineState, T> PipelineBuilder<S, T> {
 }
 
 impl<T> PipelineBuilder<Open, T> {
-    pub fn attach(mut self, node: NodeRef<T>) -> Self {
+    pub fn attach<U: Into<NodeRef<T>>>(mut self, node: U) -> Self {
+        let node_ref = node.into();
         if let Some(last) = self.nodes.last() {
-            last.set_next(node.clone());
-            node.set_prev(last.clone());
+            last.set_next(node_ref.clone());
+            node_ref.set_prev(last.clone());
         }
-        self.nodes.push(node);
+        self.nodes.push(node_ref);
         self
     }
 
