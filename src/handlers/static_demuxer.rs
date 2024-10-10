@@ -1,6 +1,7 @@
 use crate::{
     data_handler::{DataDemuxer, SomeDataHandler},
     node::NodeRef,
+    node_visitor::NodeVisitor,
     stats_producer::StatsProducer,
 };
 
@@ -34,6 +35,12 @@ impl<T> DataDemuxer<T> for StaticDemuxer<T> {
             }
         }
         None
+    }
+
+    fn visit(&mut self, visitor: &mut dyn NodeVisitor<T>) {
+        for path in &self.paths {
+            path.next.visit(visitor);
+        }
     }
 }
 

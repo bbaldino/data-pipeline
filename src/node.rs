@@ -159,6 +159,9 @@ impl<T> Node<T> {
 
     pub fn visit(&mut self, visitor: &mut dyn NodeVisitor<T>) {
         visitor.visit(self);
+        if let SomeDataHandler::Demuxer(ref mut d) = self.handler {
+            d.visit(visitor)
+        };
         if let Some(ref mut n) = self.next {
             n.visit(visitor);
         }

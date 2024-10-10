@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::{node::NodeRef, stats_producer::StatsProducer};
+use crate::{node::NodeRef, node_visitor::NodeVisitor, stats_producer::StatsProducer};
 
 pub trait DataObserver<T>: StatsProducer {
     fn observe(&mut self, data: &T);
@@ -31,8 +31,8 @@ pub trait DataConsumer<T>: StatsProducer {
 
 pub trait DataDemuxer<T>: StatsProducer {
     fn find_path(&mut self, data: &T) -> Option<&NodeRef<T>>;
-    //     // DataDemuxer has to have its own visitor logic since it handles its own paths
-    //     fn visit(&mut self, visitor: &mut dyn NodeVisitor);
+    // DataDemuxer has to have its own visitor logic since it handles its own paths
+    fn visit(&mut self, visitor: &mut dyn NodeVisitor<T>);
 }
 
 // Note: Ideally we'd have blanket impls to convert from any of the above traits into
