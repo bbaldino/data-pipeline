@@ -39,6 +39,91 @@ predicates
 Each data handler category has a corresponding trait that can be implemented by
 your types to perform some operation.
 
+Data handlers can define their own stats that can be tracked in addition to the
+ones tracked by `Node`.
+
+<details>
+<summary>Writing a data handler</summary>
+
+  To write a data handler:
+
+  1. Define your type
+  1. Implement the corresponding handler trait
+  1. Implement `Into<SomeDataHandler>` for your type (or use the macro)
+
+  <details>
+  <summary>Observer example</summary>
+    A node that logs all data items:
+
+  ```rust
+
+    // The handler type
+    #[derive(Default)]
+    struct DataLogger {
+        num_logs: u32,
+    }
+
+    // Implement the `DataObserver` trait: we just need to observe the data,
+    // not change it
+    impl<T> DataObserver<T> for DataLogger
+    where
+        T: Debug,
+    {
+        fn observe(&mut self, data: &T) {
+            self.num_logs += 1;
+            println!("{data:?}")
+        }
+
+        // Only need to implement this if your node has its own stats
+        fn get_stats(&self) -> Option<serde_json::Value> {
+            Some(json!({
+                "num_logs": self.num_logs,
+            }))
+        }
+    }
+
+    // Enable conversion of your type into the `SomeDataHandler` enum
+    impl<T> Into<SomeDataHandler<T>> for DataLogger
+    where
+        T: Debug,
+    {
+        fn into(self) -> SomeDataHandler<T> {
+            SomeDataHandler::Observer(Box::new(self))
+        }
+    }
+  ```
+
+  </details>
+  <details>
+    <summary>Transformer example</summary>
+    A node which doubles all values
+
+  ```rust
+  // The handler type
+  struct DataDoubler;
+
+  // Implement the `DataTransformer` trait since we want to change the value.
+  // Here we're just going to operate on u32s
+  impl DataObserver<u32> for DataDoubler
+  {
+    fn transform(&mut self, data: u32) -> Result<T> {
+      Ok(data * 2)
+    }
+  }
+
+  // Enable conversion of your type into the `SomeDataHandler` enum
+  impl Into<SomeDataHandler<u32>> for DataDoubler
+  {
+      fn into(self) -> SomeDataHandler<T> {
+          SomeDataHandler::Transformer(Box::new(self))
+      }
+  }
+  ```
+
+  </details>
+
+</details>
+
 ## Pipelines
 
 A pipeline is a set of `Node`s that are connected together.  Pipelines do not
@@ -73,3 +158,7 @@ let pipeline = PipelineBuilder::new()
     )
     .build();
 ```
+
+## Visitors
+
+Nodes support the concept of "visitors" to allow walking a pipeline and collecting information, like stats.  The `StatsNodeVisitor` type is already defined, but custom visitors could be written as well.
