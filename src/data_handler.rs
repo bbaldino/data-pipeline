@@ -2,16 +2,25 @@ use anyhow::Result;
 
 use crate::{node::NodeRef, node_visitor::NodeVisitor, stats_producer::StatsProducer};
 
-pub trait DataObserver<T>: StatsProducer {
+pub trait DataObserver<T> {
     fn observe(&mut self, data: &T);
+    fn get_stats(&self) -> Option<serde_json::Value> {
+        None
+    }
 }
 
-pub trait DataTransformer<T>: StatsProducer {
+pub trait DataTransformer<T> {
     fn transform(&mut self, data: T) -> Result<T>;
+    fn get_stats(&self) -> Option<serde_json::Value> {
+        None
+    }
 }
 
-pub trait DataFilter<T>: StatsProducer {
+pub trait DataFilter<T> {
     fn should_forward(&mut self, data: &T) -> bool;
+    fn get_stats(&self) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 // impl<T, F> StatsProducer for F where F: FnMut(&T) -> bool {}
@@ -25,19 +34,27 @@ pub trait DataFilter<T>: StatsProducer {
 //     }
 // }
 
-pub trait DataConsumer<T>: StatsProducer {
+pub trait DataConsumer<T> {
     fn consume(&mut self, data: T);
+    fn get_stats(&self) -> Option<serde_json::Value> {
+        None
+    }
 }
 
-pub trait DataDemuxer<T>: StatsProducer {
+pub trait DataDemuxer<T> {
     fn find_path(&mut self, data: &T) -> Option<&NodeRef<T>>;
     // DataDemuxer has to have its own visitor logic since it handles its own paths
     fn visit(&mut self, visitor: &mut dyn NodeVisitor<T>);
+    fn get_stats(&self) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 // Note: Ideally we'd have blanket impls to convert from any of the above traits into
 // SomeDatahandler, but unfortunately I don't think that can be done without causing conflicting
 // implementation errors.  This macro helps with the conversion at least.
+// Example:
+// impl_conversion_to_some_data_handler!(MyType, Observer);
 #[macro_export]
 macro_rules! impl_conversion_to_some_data_handler {
     ($type:ty,$variant:ident) => {
