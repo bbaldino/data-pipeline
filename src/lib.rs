@@ -7,38 +7,49 @@ pub mod stats_producer;
 
 #[cfg(test)]
 mod test {
-    use std::time::Instant;
+    use std::{fmt::Debug, time::Instant};
 
     use serde_json::json;
 
     use crate::{
-        data_handler::DataObserver,
+        data_handler::{DataObserver, SomeDataHandler},
         handlers::static_demuxer::{ConditionalPath, StaticDemuxer},
-        impl_conversion_to_some_data_handler,
         node::Node,
         node_visitor::StatsNodeVisitor,
         pipeline_builder::PipelineBuilder,
-        stats_producer::StatsProducer,
     };
 
-    struct DataLogger;
+    #[derive(Default)]
+    struct DataLogger {
+        num_logs: u32,
+    }
 
-    impl StatsProducer for DataLogger {
-        // Just an example of handler-specific stats
+    impl<T> DataObserver<T> for DataLogger
+    where
+        T: Debug,
+    {
+        fn observe(&mut self, data: &T) {
+            self.num_logs += 1;
+            println!("{data:?}")
+        }
+
         fn get_stats(&self) -> Option<serde_json::Value> {
             Some(json!({
-                "num_prints": "a lot",
+                "num_logs": self.num_logs,
             }))
         }
     }
 
-    impl<T> DataObserver<T> for DataLogger {
-        fn observe(&mut self, _data: &T) {
-            // println!("saw item {data:?}");
+    impl<T> From<DataLogger> for SomeDataHandler<T>
+    where
+        T: Debug,
+    {
+        fn from(val: DataLogger) -> Self {
+            SomeDataHandler::Observer(Box::new(val))
         }
     }
 
-    impl_conversion_to_some_data_handler!(DataLogger, Observer);
+    // impl_conversion_to_some_data_handler!(DataLogger, Observer);
 
     #[test]
     fn test() {
@@ -48,7 +59,7 @@ mod test {
         // let mut prev_node = first_node.clone();
         let mut builder = PipelineBuilder::default();
         for i in 0..num_nodes {
-            builder = builder.attach(Node::new(format!("{i}"), DataLogger));
+            builder = builder.attach(Node::new(format!("{i}"), DataLogger::default()));
         }
 
         let first_node = builder.build();
@@ -76,17 +87,17 @@ mod test {
                     ConditionalPath {
                         predicate: Box::new(|num: &u32| num % 2 == 0),
                         next: PipelineBuilder::new()
-                            .attach(Node::new("1a", DataLogger))
-                            .attach(Node::new("2a", DataLogger))
-                            .attach(Node::new("3a", DataLogger))
+                            .attach(Node::new("1a", DataLogger::default()))
+                            .attach(Node::new("2a", DataLogger::default()))
+                            .attach(Node::new("3a", DataLogger::default()))
                             .build(),
                     },
                     ConditionalPath {
                         predicate: Box::new(|num: &u32| num % 2 == 1),
                         next: PipelineBuilder::new()
-                            .attach(Node::new("1b", DataLogger))
-                            .attach(Node::new("2b", DataLogger))
-                            .attach(Node::new("3b", DataLogger))
+                            .attach(Node::new("1b", DataLogger::default()))
+                            .attach(Node::new("2b", DataLogger::default()))
+                            .attach(Node::new("3b", DataLogger::default()))
                             .build(),
                     },
                 ]),
