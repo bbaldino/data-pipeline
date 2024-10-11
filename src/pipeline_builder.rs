@@ -50,6 +50,15 @@ impl<T> PipelineBuilder<Open, T> {
         self
     }
 
+    pub fn attach_handler<N: Into<String>, U: Into<SomeDataHandler<T>>>(
+        self,
+        name: N,
+        handler: U,
+    ) -> Self {
+        let node = Node::new(name, handler.into());
+        self.attach(node)
+    }
+
     pub fn demux<U: Into<String>>(
         mut self,
         name: U,
