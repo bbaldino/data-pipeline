@@ -24,15 +24,24 @@ pub trait DataFilter<T> {
 }
 
 // impl<T, F> StatsProducer for F where F: FnMut(&T) -> bool {}
-//
-// impl<T, F> DataFilter<T> for F
-// where
-//     F: FnMut(&T) -> bool,
-// {
-//     fn should_forward(&mut self, packet_info: &T) -> bool {
-//         (self)(packet_info)
-//     }
-// }
+
+impl<T, F> DataFilter<T> for F
+where
+    F: FnMut(&T) -> bool,
+{
+    fn should_forward(&mut self, packet_info: &T) -> bool {
+        (self)(packet_info)
+    }
+}
+
+impl<F, T> From<F> for SomeDataHandler<T>
+where
+    F: FnMut(&T) -> bool + Send + 'static,
+{
+    fn from(value: F) -> Self {
+        SomeDataHandler::Filter(Box::new(value))
+    }
+}
 
 pub trait DataConsumer<T> {
     fn consume(&mut self, data: T);
