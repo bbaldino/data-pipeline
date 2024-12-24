@@ -104,7 +104,7 @@ ones tracked by `Node`.
 
   // Implement the `DataTransformer` trait since we want to change the value.
   // Here we're just going to operate on u32s
-  impl DataObserver<u32> for DataDoubler
+  impl DataTransformer<u32> for DataDoubler
   {
     fn transform(&mut self, data: u32) -> Result<T> {
       Ok(data * 2)
